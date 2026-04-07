@@ -54,6 +54,7 @@ async function fetchAllSongs() {
       console.log(
         `[${game}] のデータ取得スキップ（URLが存在しない可能性があります）`,
       );
+      console.error(error);
     }
   }
   console.log("全楽曲データの準備が完了しました！");
@@ -67,7 +68,7 @@ client.once("ready", async () => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  // !random と !rondom の両方に対応
+  // !random
   if (message.content.startsWith("!random")) {
     const args = message.content.split(" ").slice(1);
 
