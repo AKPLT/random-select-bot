@@ -12,28 +12,28 @@ const client = new Client({
 
 // GitHub APIが制限に引っかかった時用のバックアップ（主要な基本セット）
 const FALLBACK_URLS = {
-  iidx: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/iidx.json",
-  sdvx: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/sdvx.json",
-  popn: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/popn.json",
+  iidx: "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/iidx.json",
+  sdvx: "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/sdvx.json",
+  popn: "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/popn.json",
   chunithm:
-    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/chunithm.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/chunithm.json",
   maimai:
-    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/maimai.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/maimai.json",
   ongeki:
-    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/ongeki.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/ongeki.json",
   jubeat:
-    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/jubeat.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/jubeat.json",
   wacca:
-    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/wacca.json",
-  bms: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/bms.json",
-  pms: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/pms.json",
-  ddr: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/ddr.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/wacca.json",
+  bms: "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/bms.json",
+  pms: "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/pms.json",
+  ddr: "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/ddr.json",
   museca:
-    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/museca.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/museca.json",
   gitadora:
-    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/gitadora.json",
-  usc: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/usc.json",
-  itg: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/itg.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/gitadora.json",
+  usc: "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/usc.json",
+  itg: "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/itg.json",
 };
 
 const songsData = {};
@@ -60,7 +60,7 @@ async function fetchAllSongs() {
           const game = file.name.replace(".json", ""); // 例: "iidx.json" -> "iidx"
           targetUrls[game] =
             file.download_url ||
-            `https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/${file.name}`;
+            `https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/${file.name}`;
         }
       }
     } else {
