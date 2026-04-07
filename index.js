@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 const { Client, GatewayIntentBits } = require("discord.js");
-
+const express = require("express");
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -109,7 +109,7 @@ client.on("messageCreate", async (message) => {
     const artist = randomSong.artist || "不明なアーティスト";
 
     return message.channel.send(
-      `🎵 今日の選曲 [${game.toUpperCase()}]:\n**${title}** / ${artist}`,
+      `今日の選曲 [${game.toUpperCase()}]:\n**${title}** / ${artist}`,
     );
   }
 });
