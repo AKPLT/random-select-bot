@@ -15,7 +15,7 @@ const BASE_URL =
   "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/";
 
 const GAME_URLS = {
-  iidx: BASE_URL + "songs-arcaea.json",
+  arcaea: BASE_URL + "songs-arcaea.json",
   iidx: BASE_URL + "songs-iidx.json",
   bms: BASE_URL + "songs-bms.json",
   chunithm: BASE_URL + "songs-chunithm.json",
