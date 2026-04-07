@@ -12,28 +12,28 @@ const client = new Client({
 
 // Tachiがサポートしている主要なゲーム
 const GAME_URLS = {
-  iidx: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/iidx.json",
-  sdvx: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/sdvx.json",
-  popn: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/popn.json",
+  iidx: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/iidx.json",
+  sdvx: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/sdvx.json",
+  popn: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/popn.json",
   chunithm:
-    "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/chunithm.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/chunithm.json",
   maimai:
-    "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/maimai.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/maimai.json",
   ongeki:
-    "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/ongeki.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/ongeki.json",
   jubeat:
-    "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/jubeat.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/jubeat.json",
   wacca:
-    "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/wacca.json",
-  bms: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/bms.json",
-  pms: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/pms.json",
-  ddr: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/ddr.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/wacca.json",
+  bms: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/bms.json",
+  pms: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/pms.json",
+  ddr: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/ddr.json",
   museca:
-    "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/museca.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/museca.json",
   gitadora:
-    "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/gitadora.json",
-  usc: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/usc.json",
-  itg: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/itg.json",
+    "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/gitadora.json",
+  usc: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/usc.json",
+  itg: "https://raw.githubusercontent.com/zkldi/Tachi/main/seeds/collections/songs/itg.json",
 };
 
 const songsData = {};
@@ -72,7 +72,7 @@ client.on("messageCreate", async (message) => {
   if (message.content.startsWith("!random")) {
     const args = message.content.split(" ").slice(1);
 
-    // ヘルプコマンド (!random help または !rondom help)
+    // ヘルプコマンド (!random help)
     if (args.length > 0 && args[0].toLowerCase() === "help") {
       const availableGames = Object.keys(songsData).join(", ");
       return message.channel.send(
