@@ -1,6 +1,5 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits } = require("discord.js");
-const express = require("express");
 
 const client = new Client({
   intents: [
@@ -117,13 +116,6 @@ client.on("messageCreate", async (message) => {
       `選曲 [${game.toUpperCase()}]:\n**${title}** / ${artist}`,
     );
   }
-});
-
-// RenderとUptimeRobot用のWebサーバー設定
-const app = express();
-app.get("/", (req, res) => res.send("Bot is running!"));
-app.listen(process.env.PORT || 3000, () => {
-  console.log("Webサーバーが起動しました");
 });
 
 client.login(process.env.DISCORD_TOKEN);
