@@ -10,22 +10,28 @@ const client = new Client({
 });
 
 // TachiのデータURL設定
+// URLの共通部分
+const BASE_URL =
+  "https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/";
+
 const GAME_URLS = {
-    iidx: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/iidx.json",
-    sdvx: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/sdvx.json",
-    popn: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/popn.json",
-    chunithm: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/chunithm.json",
-    maimai: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/maimai.json",
-    ongeki: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/ongeki.json",
-    jubeat: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/jubeat.json",
-    wacca: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/wacca.json",
-    bms: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/bms.json",
-    pms: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/pms.json",
-    ddr: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/ddr.json",
-    museca: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/museca.json",
-    gitadora: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/gitadora.json",
-    usc: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/usc.json",
-    itg: "https://raw.githubusercontent.com/zkldi/Tachi/master/seeds/collections/songs/itg.json"
+  arcaea: BASE_URL + "songs-arcaea.json",
+  iidx: BASE_URL + "songs-iidx.json",
+  bms: BASE_URL + "songs-bms.json",
+  chunithm: BASE_URL + "songs-chunithm.json",
+  ddr: BASE_URL + "songs-ddr.json",
+  gitadora: BASE_URL + "songs-gitadora.json",
+  itg: BASE_URL + "songs-itg.json",
+  jubeat: BASE_URL + "songs-jubeat.json",
+  maimai: BASE_URL + "songs-maimai.json",
+  maimaidx: BASE_URL + "songs-maimaidx.json",
+  museca: BASE_URL + "songs-museca.json",
+  ongeki: BASE_URL + "songs-ongeki.json",
+  pms: BASE_URL + "songs-pms.json",
+  popn: BASE_URL + "songs-popn.json",
+  sdvx: BASE_URL + "songs-sdvx.json",
+  usc: BASE_URL + "songs-usc.json",
+  wacca: BASE_URL + "songs-wacca.json",
 };
 
 let songsData = {};
