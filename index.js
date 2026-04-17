@@ -64,7 +64,13 @@ const commands = [
         ),
     )
     .addStringOption((option) =>
-      option.setName("level").setDescription("難易度レベルで絞り込み (例: 18)"),
+      option.setName("level").setDescription("難易度レベルで絞り込み"),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("playtype")
+        .setDescription("プレイスタイルを選択 (デフォルト: SP)")
+        .addChoices({ name: "SP", value: "SP" }, { name: "DP", value: "DP" }),
     )
     .addStringOption((option) =>
       option
@@ -78,6 +84,28 @@ const commands = [
   new SlashCommandBuilder()
     .setName("update_data")
     .setDescription("楽曲データベースを手動で最新状態に更新します"),
+
+  new SlashCommandBuilder()
+    .setName("search")
+    .setDescription("楽曲情報を検索します")
+    .addStringOption((option) =>
+      option
+        .setName("game")
+        .setDescription("ゲームタイトルを選択")
+        .setRequired(true)
+        .addChoices(
+          ...Object.keys(GAME_URLS).map((k) => ({
+            name: k.toUpperCase(),
+            value: k,
+          })),
+        ),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("query")
+        .setDescription("検索キーワード（タイトル・アーティスト・ジャンル）")
+        .setRequired(true),
+    ),
 ].map((command) => command.toJSON());
 
 // --- 2. 楽曲データ取得関数 ---
@@ -86,7 +114,6 @@ async function fetchAllSongs() {
     `[${new Date().toLocaleString()}] 楽曲データの更新を開始します...`,
   );
   const newData = {};
-
   for (const [game, url] of Object.entries(GAME_URLS)) {
     try {
       const response = await fetch(url);
@@ -98,10 +125,8 @@ async function fetchAllSongs() {
       console.error(`[${game}] データの取得に失敗しました:`, error.message);
     }
   }
-
   songsData = newData;
   dataLoaded = Object.keys(newData).length > 0;
-  console.log("全楽曲データの更新が完了しました。");
 }
 
 async function fetchAllCharts() {
@@ -109,7 +134,6 @@ async function fetchAllCharts() {
     `[${new Date().toLocaleString()}] チャートデータの更新を開始します...`,
   );
   const newCharts = {};
-
   for (const [game, url] of Object.entries(CHARTS_URLS)) {
     try {
       const response = await fetch(url);
@@ -124,9 +148,7 @@ async function fetchAllCharts() {
       );
     }
   }
-
   chartsData = newCharts;
-  console.log("全チャートデータの更新が完了しました。");
 }
 
 async function fetchAllData() {
@@ -149,6 +171,41 @@ function getSongCharts(game, song) {
   return Array.isArray(song.charts) ? song.charts : [];
 }
 
+const IIDX_VERSION_NAMES = {
+  1: "1st style",
+  2: "2nd style",
+  3: "3rd style",
+  4: "4th style",
+  5: "5th style",
+  6: "6th style",
+  7: "7th style",
+  8: "8th style",
+  9: "9th style",
+  10: "10th style",
+  11: "IIDX RED",
+  12: "HAPPY SKY",
+  13: "DistorteD",
+  14: "GOLD",
+  15: "DJ TROOPERS",
+  16: "EMPRESS",
+  17: "SIRIUS",
+  18: "Resort Anthem",
+  19: "Lincle",
+  20: "tricoro",
+  21: "SPADA",
+  22: "PENDUAL",
+  23: "copula",
+  24: "SINOBUZ",
+  25: "CANNON BALLERS",
+  26: "Rootage",
+  27: "HEROIC VERSE",
+  28: "BISTROVER",
+  29: "CastHour",
+  30: "RESIDENT",
+  31: "EPOLIS",
+  32: "Pinky Crush",
+};
+
 const MAIN_IIDX_DIFFICULTIES = new Set([
   "NORMAL",
   "HYPER",
@@ -157,6 +214,26 @@ const MAIN_IIDX_DIFFICULTIES = new Set([
   "BEGINNER",
   "LEGGENDARIA",
 ]);
+
+function getFirstVersion(songCharts) {
+  let minVerNum = Infinity;
+  let originalRawVersion = "";
+  for (const chart of songCharts) {
+    if (chart.versions && chart.versions.length > 0) {
+      chart.versions.forEach((v) => {
+        const cleanV = v.replace(/-omni$/, "");
+        const numPart = parseInt(cleanV.replace(/[^\d]/g, ""), 10);
+        if (!isNaN(numPart) && numPart < minVerNum) {
+          minVerNum = numPart;
+          originalRawVersion = cleanV;
+        }
+      });
+    }
+  }
+  if (minVerNum === Infinity) return "不明";
+  const name = IIDX_VERSION_NAMES[minVerNum] || "Unknown Style";
+  return `${originalRawVersion} ${name}`;
+}
 
 function difficultyBadge(difficulty) {
   const key = difficulty?.toUpperCase();
@@ -174,151 +251,106 @@ function formatChartEntry(chart) {
   return `${difficultyBadge(difficulty)} ${difficulty} ${level}`;
 }
 
-function formatChartsByPlaytype(charts, level) {
+function formatChartsByPlaytype(charts, levelFilter, typeFilter) {
   const filtered = charts.filter((c) => {
     const difficulty = (c.difficulty || c.name || "").toUpperCase();
-    const allowed = MAIN_IIDX_DIFFICULTIES.has(difficulty);
-    if (!allowed) return false;
-    if (!level) return true;
-    return (
-      String(c.level) === level ||
-      String(c.levelNum) === level ||
-      String(c.data?.levelNum) === level
-    );
+    if (!MAIN_IIDX_DIFFICULTIES.has(difficulty)) return false;
+    const levelMatch = levelFilter
+      ? String(c.level) === levelFilter || String(c.levelNum) === levelFilter
+      : true;
+    const typeMatch = typeFilter ? c.playtype === typeFilter : true;
+    return levelMatch && typeMatch;
   });
 
   const groups = { SP: [], DP: [] };
   for (const chart of filtered) {
-    const type = chart.playtype;
-    if (type === "SP" || type === "DP") {
-      groups[type].push(formatChartEntry(chart));
+    if (chart.playtype === "SP" || chart.playtype === "DP") {
+      groups[chart.playtype].push(formatChartEntry(chart));
     }
   }
 
-  return ["SP", "DP"]
-    .map((type) => `${type}: ${groups[type].join(", ") || "なし"}`)
-    .join("\n");
+  const results = [];
+  if (groups.SP.length > 0) results.push(`**SP:** ${groups.SP.join(", ")}`);
+  if (groups.DP.length > 0) results.push(`**DP:** ${groups.DP.join(", ")}`);
+  return results.join("\n") || "条件に合う譜面がありません";
 }
 
 // --- 3. Discord Bot 起動イベント ---
 client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
-
-  // スラッシュコマンドをDiscordに登録
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
   try {
-    console.log("スラッシュコマンドをアプリケーションに登録中...");
     await rest.put(Routes.applicationCommands(client.user.id), {
       body: commands,
     });
-    console.log("コマンドの登録が正常に完了しました。");
+    console.log("コマンドの登録完了");
   } catch (error) {
-    console.error("コマンド登録エラー:", error);
+    console.error(error);
   }
 
-  // 初回データ取得
   await fetchAllData();
-
-  // --- 4. 定期更新 (Cron) の設定 ---
-  // 毎日 深夜 00:00 に実行
-  cron.schedule(
-    "0 0 * * *",
-    async () => {
-      await fetchAllSongs();
-    },
-    {
-      scheduled: true,
-      timezone: "Asia/Tokyo",
-    },
-  );
-  console.log("Cronスケジュールを設定しました（毎日 00:00 JST）");
 });
 
-// --- 5. インタラクション (コマンド実行) の処理 ---
+// --- 5. インタラクション処理 ---
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
-
   const { commandName, options } = interaction;
 
-  // 手動更新コマンド
   if (commandName === "update_data") {
     await interaction.deferReply();
     await fetchAllData();
-    return interaction.editReply(
-      "全楽曲データベースとチャートデータベースを最新の状態に更新しました！",
-    );
+    return interaction.editReply("データベースを更新しました！");
   }
 
-  // ランダム選曲コマンド
   if (commandName === "random") {
-    if (isFetching) {
-      await interaction.deferReply({ ephemeral: true });
-      return interaction.editReply(
-        "現在楽曲データを読み込み中です。数秒待ってから再度お試しください。",
-      );
-    }
+    await interaction.deferReply();
 
-    if (!dataLoaded) {
-      await interaction.deferReply({ ephemeral: true });
+    if (isFetching || !dataLoaded) {
       return interaction.editReply(
-        "楽曲データがまだ読み込まれていません。しばらく待ってから再試行してください。",
+        "データ準備中です。数秒待ってから再度お試しください。",
       );
     }
 
     const game = options.getString("game");
     const level = options.getString("level");
+    const playtype = options.getString("playtype") || "SP";
     const artist = options.getString("artist")?.toLowerCase();
     const genre = options.getString("genre")?.toLowerCase();
 
-    if (!songsData[game] || songsData[game].length === 0) {
-      return interaction.reply({
-        content:
-          "選択されたゲームのデータが読み込まれていません。管理者に確認してください。",
-        ephemeral: true,
-      });
-    }
+    if (!songsData[game])
+      return interaction.editReply("ゲームデータが見つかりません。");
 
     let filtered = songsData[game] || [];
 
-    // フィルタリング処理
-    if (artist) {
+    if (artist)
       filtered = filtered.filter((s) =>
         s.artist?.toLowerCase().includes(artist),
       );
-    }
-    if (genre) {
+    if (genre)
       filtered = filtered.filter((s) =>
         getSongGenre(s).toLowerCase().includes(genre),
       );
-    }
-    if (level) {
-      filtered = filtered.filter((s) => {
-        const charts = getSongCharts(game, s);
-        return charts.some(
-          (c) =>
-            String(c.level) === level ||
-            String(c.levelNum) === level ||
-            String(c.data?.levelNum) === level,
-        );
-      });
-    }
 
-    // 結果がない場合
-    if (filtered.length === 0) {
-      return interaction.reply({
-        content:
-          "指定された条件に一致する楽曲が見つかりませんでした。条件を変えて試してみてください。",
-        ephemeral: true,
+    // 難易度とプレイタイプのフィルタリング
+    filtered = filtered.filter((s) => {
+      const charts = getSongCharts(game, s);
+      return charts.some((c) => {
+        const levelMatch = level
+          ? String(c.level) === level || String(c.levelNum) === level
+          : true;
+        const typeMatch = c.playtype === playtype;
+        return levelMatch && typeMatch;
       });
-    }
+    });
 
-    // 抽選
+    if (filtered.length === 0)
+      return interaction.editReply("一致する楽曲が見つかりませんでした。");
+
     const song = filtered[Math.floor(Math.random() * filtered.length)];
     const songCharts = getSongCharts(game, song);
+    const matchedCharts = formatChartsByPlaytype(songCharts, level, playtype);
+    const firstVersion = getFirstVersion(songCharts);
 
-    const matchedCharts = formatChartsByPlaytype(songCharts, level);
-
-    // Embedの構築
     const resultEmbed = new EmbedBuilder()
       .setTitle(song.title)
       .setColor(0x5865f2)
@@ -326,15 +358,89 @@ client.on("interactionCreate", async (interaction) => {
       .addFields(
         { name: "Artist", value: song.artist || "Unknown", inline: true },
         { name: "Genre", value: getSongGenre(song), inline: true },
-        {
-          name: "SP / DP",
-          value: matchedCharts || "主要難易度のデータがありません",
-        },
+        { name: "First Version", value: firstVersion, inline: true },
+        { name: "Result Charts", value: matchedCharts },
       )
-      .setFooter({ text: `全 ${filtered.length} 曲の候補から選ばれました` })
+      .setFooter({ text: `全 ${filtered.length} 曲から選出されました` })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [resultEmbed] });
+    await interaction.editReply({ embeds: [resultEmbed] });
+  }
+
+  if (commandName === "search") {
+    await interaction.deferReply();
+
+    const game = options.getString("game");
+    const query = options.getString("query").toLowerCase();
+
+    if (isFetching || !dataLoaded)
+      return interaction.editReply("データ準備中です...");
+
+    let songs = songsData[game] || [];
+
+    // 曖昧検索ロジック（単語の境界を意識しつつ検索）
+    const results = songs.filter((s) => {
+      const title = (s.title || "").toLowerCase();
+      const artist = (s.artist || "").toLowerCase();
+      const genre = getSongGenre(s).toLowerCase();
+      const searchRegex = new RegExp(`\\b${query}\\b`, "i");
+
+      return (
+        searchRegex.test(title) ||
+        searchRegex.test(artist) ||
+        searchRegex.test(genre) ||
+        title.includes(query)
+      );
+    });
+
+    if (results.length === 0)
+      return interaction.editReply(`「${query}」に一致する楽曲はありません。`);
+
+    // --- パターンA: 1件のみ、またはタイトル完全一致 (詳細表示) ---
+    const exactMatch = results.find((s) => s.title.toLowerCase() === query);
+    if (results.length === 1 || exactMatch) {
+      const target = exactMatch || results[0];
+      const songCharts = getSongCharts(game, target);
+      const matchedCharts = formatChartsByPlaytype(songCharts, null, null);
+      const firstVersion = getFirstVersion(songCharts);
+
+      const embed = new EmbedBuilder()
+        .setTitle(target.title)
+        .setColor(0x00ae86)
+        .setAuthor({ name: `${game.toUpperCase()} 楽曲詳細` })
+        .addFields(
+          { name: "Artist", value: target.artist || "Unknown", inline: true },
+          { name: "Genre", value: getSongGenre(target), inline: true },
+          { name: "First Version", value: firstVersion, inline: true },
+          { name: "Charts", value: matchedCharts },
+        );
+      return interaction.editReply({ embeds: [embed] });
+    }
+
+    // --- パターンB: ヒット数が多い場合 (リスト表示) ---
+    // 30件以内ならすべて表示、それ以上なら20件に絞る
+    const isTooMany = results.length > 30;
+    const maxList = isTooMany ? 20 : results.length;
+
+    const listString = results
+      .slice(0, maxList)
+      .map((s, i) => {
+        const genre = getSongGenre(s);
+        return `**${i + 1}.** ${s.title} [${genre}] / ${s.artist}`;
+      })
+      .join("\n");
+
+    const footerText = isTooMany
+      ? `上位 ${maxList} 件を表示中。目的の曲があればキーワードを絞ってください。`
+      : `計 ${results.length} 件見つかりました。`;
+
+    const embed = new EmbedBuilder()
+      .setTitle(`「${query}」の検索結果 (${results.length} 件)`)
+      .setColor(0x00ae86)
+      .setDescription(listString)
+      .setFooter({ text: footerText });
+
+    await interaction.editReply({ embeds: [embed] });
   }
 });
 
