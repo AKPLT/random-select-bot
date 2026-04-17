@@ -1,4 +1,6 @@
 require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
 const {
   Client,
   GatewayIntentBits,
@@ -8,6 +10,8 @@ const {
   Routes,
 } = require("discord.js");
 const cron = require("node-cron");
+
+const CACHE_DIR = path.join(__dirname, "cache");
 
 // --- 設定エリア ---
 const client = new Client({
@@ -57,10 +61,6 @@ const CHARTS_URLS = {
   wacca: BASE_URL + "charts-wacca.json",
 };
 
-let songsData = {};
-let chartsData = {};
-
-const GAMES_WITH_INLINE_CHARTS = new Set([]);
 let isFetching = false;
 let dataLoaded = false;
 
@@ -130,55 +130,51 @@ const commands = [
 ].map((command) => command.toJSON());
 
 // --- 2. 楽曲データ取得関数 ---
-async function fetchAllSongs() {
-  console.log(
-    `[${new Date().toLocaleString()}] 楽曲データの更新を開始します...`,
-  );
-  const newData = {};
-  for (const [game, url] of Object.entries(GAME_URLS)) {
+async function fetchAndSave(label, urls) {
+  console.log(`[${new Date().toLocaleString()}] ${label}の更新を開始します...`);
+  let saved = 0;
+  for (const [game, url] of Object.entries(urls)) {
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      newData[game] = data;
-      console.log(`[${game}] ${data.length} 曲の読み込みに成功しました`);
-    } catch (error) {
-      console.error(`[${game}] データの取得に失敗しました:`, error.message);
-    }
-  }
-  songsData = newData;
-  dataLoaded = Object.keys(newData).length > 0;
-}
-
-async function fetchAllCharts() {
-  console.log(
-    `[${new Date().toLocaleString()}] チャートデータの更新を開始します...`,
-  );
-  const newCharts = {};
-  for (const [game, url] of Object.entries(CHARTS_URLS)) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      newCharts[game] = data;
-      console.log(`[${game}] ${data.length} チャートの読み込みに成功しました`);
-    } catch (error) {
-      console.error(
-        `[${game}] チャートデータの取得に失敗しました:`,
-        error.message,
+      fs.writeFileSync(
+        path.join(CACHE_DIR, `${label}-${game}.json`),
+        JSON.stringify(data),
       );
+      console.log(`[${game}] ${data.length} 件の${label}を保存しました`);
+      saved++;
+    } catch (error) {
+      console.error(`[${game}] ${label}の取得に失敗しました:`, error.message);
     }
   }
-  chartsData = newCharts;
+  return saved;
 }
 
 async function fetchAllData() {
+  if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR);
   isFetching = true;
   try {
-    await Promise.all([fetchAllSongs(), fetchAllCharts()]);
+    const [songs] = await Promise.all([
+      fetchAndSave("songs", GAME_URLS),
+      fetchAndSave("charts", CHARTS_URLS),
+    ]);
+    if (songs > 0) dataLoaded = true;
   } finally {
     isFetching = false;
   }
+}
+
+function loadGameData(game) {
+  const songsPath = path.join(CACHE_DIR, `songs-${game}.json`);
+  const chartsPath = path.join(CACHE_DIR, `charts-${game}.json`);
+  const songs = fs.existsSync(songsPath)
+    ? JSON.parse(fs.readFileSync(songsPath, "utf8"))
+    : null;
+  const charts = fs.existsSync(chartsPath)
+    ? JSON.parse(fs.readFileSync(chartsPath, "utf8"))
+    : [];
+  return { songs, charts };
 }
 
 function getSongGenre(song) {
@@ -186,12 +182,8 @@ function getSongGenre(song) {
   return song.genre || song.data?.genre || "N/A";
 }
 
-function getSongCharts(game, song) {
-  if (GAMES_WITH_INLINE_CHARTS.has(game) && Array.isArray(song.charts)) {
-    return song.charts;
-  }
-  const extra = chartsData[game] || [];
-  return extra.filter((chart) => chart.songID === song.id);
+function getSongCharts(song, charts) {
+  return charts.filter((chart) => chart.songID === song.id);
 }
 
 const IIDX_VERSION_NAMES = {
@@ -451,6 +443,13 @@ client.once("ready", async () => {
     console.error(error);
   }
 
+  if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR);
+  // キャッシュが存在すればすぐにコマンドを受け付ける
+  const cacheReady = Object.keys(GAME_URLS).some((game) =>
+    fs.existsSync(path.join(CACHE_DIR, `songs-${game}.json`)),
+  );
+  if (cacheReady) dataLoaded = true;
+
   await fetchAllData();
 
   // 毎日午前3時に楽曲データを自動更新
@@ -489,10 +488,11 @@ client.on("interactionCreate", async (interaction) => {
     const artist = options.getString("artist")?.toLowerCase();
     const genre = options.getString("genre")?.toLowerCase();
 
-    if (!songsData[game])
+    const { songs: allSongs, charts: allCharts } = loadGameData(game);
+    if (!allSongs)
       return interaction.editReply("ゲームデータが見つかりません。");
 
-    let filtered = songsData[game] || [];
+    let filtered = allSongs;
 
     if (artist)
       filtered = filtered.filter((s) =>
@@ -505,7 +505,7 @@ client.on("interactionCreate", async (interaction) => {
 
     // 難易度とプレイタイプのフィルタリング
     filtered = filtered.filter((s) => {
-      const charts = getSongCharts(game, s);
+      const charts = getSongCharts(s, allCharts);
       return charts.some((c) => {
         const levelMatch = level
           ? String(c.level) === level || String(c.levelNum) === level
@@ -526,7 +526,7 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.editReply("一致する楽曲が見つかりませんでした。");
 
     const song = filtered[Math.floor(Math.random() * filtered.length)];
-    const songCharts = getSongCharts(game, song);
+    const songCharts = getSongCharts(song, allCharts);
     const matchedCharts = formatChartsByPlaytype(
       game,
       songCharts,
@@ -560,10 +560,12 @@ client.on("interactionCreate", async (interaction) => {
     if (isFetching || !dataLoaded)
       return interaction.editReply("データ準備中です...");
 
-    let songs = songsData[game] || [];
+    const { songs: allSongs, charts: allCharts } = loadGameData(game);
+    if (!allSongs)
+      return interaction.editReply("ゲームデータが見つかりません。");
 
     const uniqueResults = new Map();
-    songs.forEach((s) => {
+    allSongs.forEach((s) => {
       const title = (s.title || "").toLowerCase();
       const artist = (s.artist || "").toLowerCase();
       const genre = getSongGenre(s).toLowerCase();
@@ -589,7 +591,7 @@ client.on("interactionCreate", async (interaction) => {
     const exactMatch = results.find((s) => s.title.toLowerCase() === query);
     if (results.length === 1 || exactMatch) {
       const target = exactMatch || results[0];
-      const songCharts = getSongCharts(game, target);
+      const songCharts = getSongCharts(target, allCharts);
       const matchedCharts = formatChartsByPlaytype(
         game,
         songCharts,
