@@ -1,0 +1,22 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches: [ main ] # mainブランチにpushされたら実行
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd ~/random-select-bot # ボットのディレクトリ
+            git pull origin main
+            npm install --production
+            pm2 restart random-select-bot
