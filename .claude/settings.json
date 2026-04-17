@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/charts-iidx.json\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/charts-sdvx.json\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/charts-chunithm.json\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/zkldi/Tachi/refs/heads/main/seeds/collections/charts-maimaidx.json\")"
+    ]
+  }
+}
