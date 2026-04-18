@@ -132,8 +132,8 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
-    .setName("update_data")
-    .setDescription("楽曲データベースを手動で最新状態に更新します"),
+    .setName("help")
+    .setDescription("コマンドの使い方を表示します"),
 
   new SlashCommandBuilder()
     .setName("search")
@@ -614,14 +614,44 @@ client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const { commandName, options } = interaction;
 
-  if (commandName === "update_data") {
-    await interaction.deferReply();
-    if (isFetching)
-      return interaction.editReply(
-        "現在データを更新中です。完了後に再度お試しください。",
-      );
-    await fetchAllData();
-    return interaction.editReply("データベースを更新しました！");
+  if (commandName === "help") {
+    const embed = new EmbedBuilder()
+      .setTitle("ランダム選曲ボット 使い方")
+      .setColor(0x5865f2)
+      .addFields(
+        {
+          name: "🎲 `/random`　ランダム選曲",
+          value: [
+            "`game` … ゲームタイトル（必須）",
+            "`level` … 難易度レベルで絞り込み（例: `12`）",
+            "`playtype` … SP / DP で絞り込み",
+            "`artist` … アーティスト名で絞り込み（部分一致）",
+            "`genre` … ジャンルで絞り込み（部分一致）",
+            "",
+            "**【IIDXのみ】地力表から選曲**",
+            "`table` … 地力表を選択（☆11/☆12 クリア/ハード）",
+            "`rank` … ランクを選択（`table` 選択後にオートコンプリート表示）",
+            "",
+            "例: `/random game:IIDX table:☆12 ハード地力表 rank:地力S`",
+          ].join("\n"),
+        },
+        {
+          name: "🔍 `/search`　楽曲検索",
+          value: [
+            "`game` … ゲームタイトル（必須）",
+            "`query` … 検索キーワード（タイトル・アーティスト・ジャンルを横断検索）",
+            "",
+            "1件ヒット時は詳細表示、複数ヒット時はリスト表示（最大10件）",
+            "タイトルをクリックするとYouTube検索へ飛べます",
+          ].join("\n"),
+        },
+        {
+          name: "📋 対応ゲーム",
+          value: Object.keys(GAME_URLS).map((k) => k.toUpperCase()).join(", "),
+        },
+      )
+      .setFooter({ text: "楽曲データは毎日午前3時に自動更新されます" });
+    return interaction.reply({ embeds: [embed] });
   }
 
   if (commandName === "random") {
