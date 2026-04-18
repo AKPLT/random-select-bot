@@ -648,6 +648,9 @@ client.on("interactionCreate", async (interaction) => {
     if (rank && !tableValue) {
       return interaction.editReply("rank を指定する場合は table も選択してください。");
     }
+    if (tableValue && !rank) {
+      return interaction.editReply("table を選択した場合は rank も入力してください。");
+    }
 
     const { songs: allSongs, charts: allCharts } = loadGameData(game);
     if (!allSongs)
@@ -657,6 +660,7 @@ client.on("interactionCreate", async (interaction) => {
     let tableLabel = null;
 
     if (tableValue && rank) {
+      // table指定時はlevelを無視し、tableに含まれるレベル情報を使用する
       const [tableLevel, internalType] = tableValue.split("_");
       const tableType = internalType === "normal" ? "clear" : "hard";
       const { songs: tableSongs, error } = filterSongsByTableRank(allSongs, tableType, tableLevel, rank);
