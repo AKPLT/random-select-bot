@@ -533,10 +533,9 @@ function formatChartsByPlaytype(game, charts, levelFilter, typeFilter) {
   return results.join("\n") || "条件に合う譜面がありません";
 }
 
-const DEBUG_GUILD_IDS = [
-  "1282326198558396416",
-  "1420401813429026988",
-];
+const DEBUG_GUILD_IDS = process.env.DEBUG_GUILD_IDS
+  ? process.env.DEBUG_GUILD_IDS.split(",").map((id) => id.trim())
+  : [];
 
 // --- 3. Discord Bot 起動イベント ---
 client.once("ready", async () => {
