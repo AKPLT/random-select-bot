@@ -115,17 +115,20 @@ const commands = [
     )
     .addStringOption((option) =>
       option
-        .setName("type")
-        .setDescription("【IIDXのみ】地力表の種類を選択")
+        .setName("table")
+        .setDescription("【IIDXのみ】地力表を選択")
         .addChoices(
-          { name: "クリア地力表", value: "clear" },
-          { name: "ハード地力表", value: "hard" },
+          { name: "☆11 クリア地力表", value: "11_normal" },
+          { name: "☆11 ハード地力表", value: "11_hard" },
+          { name: "☆12 クリア地力表", value: "12_normal" },
+          { name: "☆12 ハード地力表", value: "12_hard" },
         ),
     )
     .addStringOption((option) =>
       option
         .setName("rank")
-        .setDescription("【IIDXのみ】地力表のランク (例: 地力S, 地力A+)"),
+        .setDescription("【IIDXのみ】地力表のランク（tableを先に選択してください）")
+        .setAutocomplete(true),
     ),
 
   new SlashCommandBuilder()
@@ -576,7 +579,37 @@ client.once("ready", async () => {
   });
 });
 
-// --- 5. インタラクション処理 ---
+// --- 5. オートコンプリート処理 ---
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isAutocomplete()) return;
+  if (interaction.commandName !== "random") return;
+
+  const tableValue = interaction.options.getString("table");
+  const focused = interaction.options.getFocused().toLowerCase();
+
+  if (!tableValue) {
+    await interaction.respond([]);
+    return;
+  }
+
+  const [level, internalType] = tableValue.split("_");
+  const tableType = internalType === "normal" ? "clear" : "hard";
+  const folders = loadTableFolders(tableType, level);
+
+  if (!folders) {
+    await interaction.respond([]);
+    return;
+  }
+
+  const choices = folders
+    .filter((f) => f.title.toLowerCase().includes(focused))
+    .map((f) => ({ name: f.title, value: f.title }))
+    .slice(0, 25);
+
+  await interaction.respond(choices);
+});
+
+// --- 6. コマンド処理 ---
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const { commandName, options } = interaction;
@@ -605,18 +638,15 @@ client.on("interactionCreate", async (interaction) => {
     const playtype = options.getString("playtype");
     const artist = options.getString("artist")?.toLowerCase();
     const genre = options.getString("genre")?.toLowerCase();
-    const tableType = options.getString("type");
+    const tableValue = options.getString("table"); // 例: "12_hard"
     const rank = options.getString("rank");
 
     // 地力表オプションはIIDXのみ
-    if ((tableType || rank) && game !== "iidx") {
-      return interaction.editReply("type / rank オプションはIIDXのみ使用できます。");
+    if ((tableValue || rank) && game !== "iidx") {
+      return interaction.editReply("table / rank オプションはIIDXのみ使用できます。");
     }
-    if (rank && (!tableType || !level)) {
-      return interaction.editReply("rank を指定する場合は level (11 または 12) と type (clear/hard) も必須です。");
-    }
-    if (rank && level !== "11" && level !== "12") {
-      return interaction.editReply("地力表は level:11 または level:12 のみ対応しています。");
+    if (rank && !tableValue) {
+      return interaction.editReply("rank を指定する場合は table も選択してください。");
     }
 
     const { songs: allSongs, charts: allCharts } = loadGameData(game);
@@ -626,11 +656,13 @@ client.on("interactionCreate", async (interaction) => {
     let filtered = allSongs;
     let tableLabel = null;
 
-    if (rank) {
-      const { songs: tableSongs, error } = filterSongsByTableRank(allSongs, tableType, level, rank);
+    if (tableValue && rank) {
+      const [tableLevel, internalType] = tableValue.split("_");
+      const tableType = internalType === "normal" ? "clear" : "hard";
+      const { songs: tableSongs, error } = filterSongsByTableRank(allSongs, tableType, tableLevel, rank);
       if (error) return interaction.editReply(error);
       filtered = tableSongs;
-      tableLabel = `☆${level} ${tableType === "clear" ? "クリア" : "ハード"}地力表 | ${rank}`;
+      tableLabel = `☆${tableLevel} ${tableType === "clear" ? "クリア" : "ハード"}地力表 | ${rank}`;
     } else {
       if (artist)
         filtered = filtered.filter((s) =>
