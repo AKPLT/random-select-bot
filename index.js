@@ -735,7 +735,7 @@ client.on("interactionCreate", async (interaction) => {
     const matchedCharts = formatChartsByPlaytype(
       game,
       songCharts,
-      level,
+      tableValue ? null : level,
       playtype,
     );
     const firstVersion = getFirstVersion(game, songCharts);
