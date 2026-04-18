@@ -533,15 +533,31 @@ function formatChartsByPlaytype(game, charts, levelFilter, typeFilter) {
   return results.join("\n") || "条件に合う譜面がありません";
 }
 
+const DEBUG_GUILD_IDS = [
+  "1282326198558396416",
+  "1420401813429026988",
+];
+
 // --- 3. Discord Bot 起動イベント ---
 client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
   try {
-    await rest.put(Routes.applicationCommands(client.user.id), {
-      body: commands,
-    });
-    console.log("コマンドの登録完了");
+    if (DEBUG_GUILD_IDS.length > 0) {
+      await Promise.all(
+        DEBUG_GUILD_IDS.map((guildId) =>
+          rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
+            body: commands,
+          }),
+        ),
+      );
+      console.log(`コマンドの登録完了 (ギルド: ${DEBUG_GUILD_IDS.join(", ")})`);
+    } else {
+      await rest.put(Routes.applicationCommands(client.user.id), {
+        body: commands,
+      });
+      console.log("コマンドの登録完了 (グローバル)");
+    }
   } catch (error) {
     console.error(error);
   }
