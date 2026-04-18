@@ -61,6 +61,14 @@ const CHARTS_URLS = {
   wacca: BASE_URL + "charts-wacca.json",
 };
 
+const TACHI_TABLE_BASE = "https://kamaitachi.ac/api/v1/games/iidx/SP/tables";
+const TACHI_TABLE_URLS = {
+  "clear-11": `${TACHI_TABLE_BASE}/iidx-SP-clear-11/folders`,
+  "clear-12": `${TACHI_TABLE_BASE}/iidx-SP-clear-12/folders`,
+  "hard-11": `${TACHI_TABLE_BASE}/iidx-SP-hard-11/folders`,
+  "hard-12": `${TACHI_TABLE_BASE}/iidx-SP-hard-12/folders`,
+};
+
 let isFetching = false;
 let dataLoaded = false;
 
@@ -100,6 +108,20 @@ const commands = [
     )
     .addStringOption((option) =>
       option.setName("genre").setDescription("ジャンルで検索"),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("type")
+        .setDescription("【IIDXのみ】地力表の種類を選択")
+        .addChoices(
+          { name: "クリア地力表", value: "clear" },
+          { name: "ハード地力表", value: "hard" },
+        ),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("rank")
+        .setDescription("【IIDXのみ】地力表のランク (例: 地力S, 地力A+)"),
     ),
 
   new SlashCommandBuilder()
@@ -151,6 +173,27 @@ async function fetchAndSave(label, urls) {
   return saved;
 }
 
+async function fetchTachiTables() {
+  console.log(`[${new Date().toLocaleString()}] IIDX地力表データの更新を開始します...`);
+  for (const [key, url] of Object.entries(TACHI_TABLE_URLS)) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (data.success && data.body) {
+        const folders = Array.isArray(data.body) ? data.body : data.body.folders || [];
+        fs.writeFileSync(
+          path.join(CACHE_DIR, `tachi-table-iidx-${key}.json`),
+          JSON.stringify(folders),
+        );
+        console.log(`[tachi-table-iidx-${key}] ${folders.length} フォルダを保存しました`);
+      }
+    } catch (error) {
+      console.error(`[tachi-table-iidx-${key}] 取得に失敗しました:`, error.message);
+    }
+  }
+}
+
 async function fetchAllData() {
   if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR);
   isFetching = true;
@@ -158,6 +201,7 @@ async function fetchAllData() {
     const [songs] = await Promise.all([
       fetchAndSave("songs", GAME_URLS),
       fetchAndSave("charts", CHARTS_URLS),
+      fetchTachiTables(),
     ]);
     if (songs > 0) dataLoaded = true;
   } finally {
@@ -175,6 +219,34 @@ function loadGameData(game) {
     ? JSON.parse(fs.readFileSync(chartsPath, "utf8"))
     : [];
   return { songs, charts };
+}
+
+function makeYoutubeUrl(title, artist, game) {
+  const query = `${game.toUpperCase()} ${title} ${artist || ""}`.trim();
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+}
+
+function loadTableFolders(tableType, level) {
+  const tablePath = path.join(CACHE_DIR, `tachi-table-iidx-${tableType}-${level}.json`);
+  if (!fs.existsSync(tablePath)) return null;
+  return JSON.parse(fs.readFileSync(tablePath, "utf8"));
+}
+
+function filterSongsByTableRank(allSongs, allCharts, tableType, level, rank) {
+  const folders = loadTableFolders(tableType, level);
+  if (!folders) return { songs: null, error: `地力表データ（☆${level} ${tableType === "clear" ? "クリア" : "ハード"}）が見つかりません。/update_data を実行してください。` };
+
+  const folder = folders.find((f) => f.title === rank);
+  if (!folder) {
+    const available = folders.map((f) => f.title).join(", ");
+    return { songs: null, error: `ランク「${rank}」が見つかりません。利用可能なランク: ${available}` };
+  }
+
+  const chartIDs = new Set(folder.data?.chartIDs || []);
+  const songIDs = new Set(
+    allCharts.filter((c) => chartIDs.has(c.chartID)).map((c) => c.songID),
+  );
+  return { songs: allSongs.filter((s) => songIDs.has(s.id)), error: null };
 }
 
 function getSongGenre(song) {
@@ -487,40 +559,61 @@ client.on("interactionCreate", async (interaction) => {
     const playtype = options.getString("playtype");
     const artist = options.getString("artist")?.toLowerCase();
     const genre = options.getString("genre")?.toLowerCase();
+    const tableType = options.getString("type");
+    const rank = options.getString("rank");
+
+    // 地力表オプションはIIDXのみ
+    if ((tableType || rank) && game !== "iidx") {
+      return interaction.editReply("type / rank オプションはIIDXのみ使用できます。");
+    }
+    if (rank && (!tableType || !level)) {
+      return interaction.editReply("rank を指定する場合は level (11 または 12) と type (clear/hard) も必須です。");
+    }
+    if (rank && level !== "11" && level !== "12") {
+      return interaction.editReply("地力表は level:11 または level:12 のみ対応しています。");
+    }
 
     const { songs: allSongs, charts: allCharts } = loadGameData(game);
     if (!allSongs)
       return interaction.editReply("ゲームデータが見つかりません。");
 
     let filtered = allSongs;
+    let tableLabel = null;
 
-    if (artist)
-      filtered = filtered.filter((s) =>
-        s.artist?.toLowerCase().includes(artist),
-      );
-    if (genre)
-      filtered = filtered.filter((s) =>
-        getSongGenre(s).toLowerCase().includes(genre),
-      );
+    if (rank) {
+      const { songs: tableSongs, error } = filterSongsByTableRank(allSongs, allCharts, tableType, level, rank);
+      if (error) return interaction.editReply(error);
+      filtered = tableSongs;
+      tableLabel = `☆${level} ${tableType === "clear" ? "クリア" : "ハード"}地力表 | ${rank}`;
+    } else {
+      if (artist)
+        filtered = filtered.filter((s) =>
+          s.artist?.toLowerCase().includes(artist),
+        );
+      if (genre)
+        filtered = filtered.filter((s) =>
+          getSongGenre(s).toLowerCase().includes(genre),
+        );
 
-    // 難易度とプレイタイプのフィルタリング
-    filtered = filtered.filter((s) => {
-      const charts = getSongCharts(s, allCharts);
-      return charts.some((c) => {
-        const levelMatch = level
-          ? String(c.level) === level || String(c.levelNum) === level
-          : true;
+      // 難易度とプレイタイプのフィルタリング
+      filtered = filtered.filter((s) => {
+        const charts = getSongCharts(s, allCharts);
+        return charts.some((c) => {
+          const levelMatch = level
+            ? String(c.level) === level || String(c.levelNum) === level
+            : true;
 
-        let typeMatch = true;
-        if (playtype === "SP") {
-          typeMatch = ["SP", "Single", "Touch"].includes(c.playtype);
-        } else if (playtype === "DP") {
-          typeMatch = ["DP", "Double"].includes(c.playtype);
-        }
+          let typeMatch = true;
+          if (playtype === "SP") {
+            typeMatch = ["SP", "Single", "Touch"].includes(c.playtype);
+          } else if (playtype === "DP") {
+            typeMatch = ["DP", "Double"].includes(c.playtype);
+          }
 
-        return levelMatch && typeMatch;
+          return levelMatch && typeMatch;
+        });
       });
-    });
+    }
 
     if (filtered.length === 0)
       return interaction.editReply("一致する楽曲が見つかりませんでした。");
@@ -534,9 +627,14 @@ client.on("interactionCreate", async (interaction) => {
       playtype,
     );
     const firstVersion = getFirstVersion(game, songCharts);
+    const ytUrl = makeYoutubeUrl(song.title, song.artist, game);
+
+    const footerParts = [`全 ${filtered.length} 曲から選出されました`];
+    if (tableLabel) footerParts.unshift(tableLabel);
 
     const resultEmbed = new EmbedBuilder()
       .setTitle(song.title)
+      .setURL(ytUrl)
       .setColor(0x5865f2)
       .setAuthor({ name: `${game.toUpperCase()} ランダム選曲結果` })
       .addFields(
@@ -545,7 +643,7 @@ client.on("interactionCreate", async (interaction) => {
         { name: "First Version", value: firstVersion, inline: true },
         { name: "Result Charts", value: matchedCharts },
       )
-      .setFooter({ text: `全 ${filtered.length} 曲から選出されました` })
+      .setFooter({ text: footerParts.join(" | ") })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [resultEmbed] });
@@ -600,8 +698,10 @@ client.on("interactionCreate", async (interaction) => {
       );
       const firstVersion = getFirstVersion(game, songCharts);
 
+      const ytUrl = makeYoutubeUrl(target.title, target.artist, game);
       const embed = new EmbedBuilder()
         .setTitle(target.title)
+        .setURL(ytUrl)
         .setColor(0x00ae86)
         .setAuthor({ name: `${game.toUpperCase()} 楽曲詳細` })
         .addFields(
@@ -621,7 +721,8 @@ client.on("interactionCreate", async (interaction) => {
       .slice(0, maxList)
       .map((s, i) => {
         const genre = getSongGenre(s);
-        return `**${i + 1}.** ${s.title} [${genre}] / ${s.artist}`;
+        const ytUrl = makeYoutubeUrl(s.title, s.artist, game);
+        return `**${i + 1}.** [${s.title}](${ytUrl}) [${genre}] / ${s.artist}`;
       })
       .join("\n");
 
