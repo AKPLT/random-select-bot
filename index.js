@@ -12,6 +12,7 @@ const {
 const cron = require("node-cron");
 
 const CACHE_DIR = path.join(__dirname, "cache");
+const DATA_DIR = path.join(__dirname, "data");
 
 // --- 設定エリア ---
 const client = new Client({
@@ -61,12 +62,15 @@ const CHARTS_URLS = {
   wacca: BASE_URL + "charts-wacca.json",
 };
 
-const TACHI_TABLE_BASE = "https://kamaitachi.ac/api/v1/games/iidx/SP/tables";
-const TACHI_TABLE_URLS = {
-  "clear-11": `${TACHI_TABLE_BASE}/iidx-SP-clear-11/folders`,
-  "clear-12": `${TACHI_TABLE_BASE}/iidx-SP-clear-12/folders`,
-  "hard-11": `${TACHI_TABLE_BASE}/iidx-SP-hard-11/folders`,
-  "hard-12": `${TACHI_TABLE_BASE}/iidx-SP-hard-12/folders`,
+const CHECKER_BASE = "https://iidx-difficulty-table-checker.nomadblacky.dev";
+
+const TIER_NAMES = {
+  0: "未定", 1: "地力S+", 2: "個人差S+", 3: "地力S", 4: "個人差S",
+  5: "地力A+", 6: "個人差A+", 7: "地力A", 8: "個人差A",
+  9: "地力B+", 10: "個人差B+", 11: "地力B", 12: "個人差B",
+  13: "地力C", 14: "個人差C", 15: "地力D", 16: "個人差D",
+  17: "地力E", 18: "個人差E", 19: "地力F", 20: "個人差F",
+  21: "超個人差",
 };
 
 let isFetching = false;
@@ -173,24 +177,40 @@ async function fetchAndSave(label, urls) {
   return saved;
 }
 
-async function fetchTachiTables() {
+async function fetchIIDXDifficultyTables() {
   console.log(`[${new Date().toLocaleString()}] IIDX地力表データの更新を開始します...`);
-  for (const [key, url] of Object.entries(TACHI_TABLE_URLS)) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      if (data.success && data.body) {
-        const folders = Array.isArray(data.body) ? data.body : data.body.folders || [];
-        fs.writeFileSync(
-          path.join(CACHE_DIR, `tachi-table-iidx-${key}.json`),
-          JSON.stringify(folders),
-        );
-        console.log(`[tachi-table-iidx-${key}] ${folders.length} フォルダを保存しました`);
+  try {
+    const indexRes = await fetch(CHECKER_BASE + "/");
+    if (!indexRes.ok) throw new Error(`HTTP ${indexRes.status}`);
+    const html = await indexRes.text();
+    const buildMatch = html.match(/_next\/static\/([a-f0-9]+)\/_buildManifest\.js/);
+    if (!buildMatch) throw new Error("Build ID not found");
+    const buildId = buildMatch[1];
+
+    const dataRes = await fetch(`${CHECKER_BASE}/_next/data/${buildId}/table/11_hard.json`);
+    if (!dataRes.ok) throw new Error(`HTTP ${dataRes.status}`);
+    const raw = await dataRes.json();
+    const tables = raw.pageProps.tables.tables;
+
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
+    for (const t of tables) {
+      const groups = {};
+      for (const song of t.table.data) {
+        const tierName = TIER_NAMES[song.tier] ?? `Tier${song.tier}`;
+        if (!groups[song.tier]) groups[song.tier] = { title: tierName, songs: [] };
+        groups[song.tier].songs.push(song.name.replace(/_/g, " "));
       }
-    } catch (error) {
-      console.error(`[tachi-table-iidx-${key}] 取得に失敗しました:`, error.message);
+      const result = Object.entries(groups)
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([, v]) => v);
+      fs.writeFileSync(
+        path.join(DATA_DIR, `iidx-table-${t.id}.json`),
+        JSON.stringify(result, null, 2),
+      );
+      console.log(`[iidx-table-${t.id}] ${t.table.data.length} 曲を保存しました`);
     }
+  } catch (error) {
+    console.error("IIDX地力表の取得に失敗しました:", error.message);
   }
 }
 
@@ -201,7 +221,7 @@ async function fetchAllData() {
     const [songs] = await Promise.all([
       fetchAndSave("songs", GAME_URLS),
       fetchAndSave("charts", CHARTS_URLS),
-      fetchTachiTables(),
+      fetchIIDXDifficultyTables(),
     ]);
     if (songs > 0) dataLoaded = true;
   } finally {
@@ -226,13 +246,24 @@ function makeYoutubeUrl(title, artist, game) {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
-function loadTableFolders(tableType, level) {
-  const tablePath = path.join(CACHE_DIR, `tachi-table-iidx-${tableType}-${level}.json`);
-  if (!fs.existsSync(tablePath)) return null;
-  return JSON.parse(fs.readFileSync(tablePath, "utf8"));
+function normalizeTitle(title) {
+  return (title || "")
+    .toLowerCase()
+    .replace(/[♥♪♦★☆]/g, "")   // 末尾の装飾記号
+    .replace(/feat\.\s*/gi, "feat. ") // feat. 表記を統一
+    .replace(/\s+/g, " ")            // 連続スペースを1つに
+    .trim();
 }
 
-function filterSongsByTableRank(allSongs, allCharts, tableType, level, rank) {
+function loadTableFolders(tableType, level) {
+  // type: "clear" → "normal", "hard" → "hard"
+  const tableId = `${level}_${tableType === "clear" ? "normal" : "hard"}`;
+  const filePath = path.join(DATA_DIR, `iidx-table-${tableId}.json`);
+  if (!fs.existsSync(filePath)) return null;
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+function filterSongsByTableRank(allSongs, tableType, level, rank) {
   const folders = loadTableFolders(tableType, level);
   if (!folders) return { songs: null, error: `地力表データ（☆${level} ${tableType === "clear" ? "クリア" : "ハード"}）が見つかりません。/update_data を実行してください。` };
 
@@ -242,11 +273,11 @@ function filterSongsByTableRank(allSongs, allCharts, tableType, level, rank) {
     return { songs: null, error: `ランク「${rank}」が見つかりません。利用可能なランク: ${available}` };
   }
 
-  const chartIDs = new Set(folder.data?.chartIDs || []);
-  const songIDs = new Set(
-    allCharts.filter((c) => chartIDs.has(c.chartID)).map((c) => c.songID),
-  );
-  return { songs: allSongs.filter((s) => songIDs.has(s.id)), error: null };
+  const songTitles = new Set(folder.songs.map(normalizeTitle));
+  return {
+    songs: allSongs.filter((s) => songTitles.has(normalizeTitle(s.title))),
+    error: null,
+  };
 }
 
 function getSongGenre(song) {
@@ -581,7 +612,7 @@ client.on("interactionCreate", async (interaction) => {
     let tableLabel = null;
 
     if (rank) {
-      const { songs: tableSongs, error } = filterSongsByTableRank(allSongs, allCharts, tableType, level, rank);
+      const { songs: tableSongs, error } = filterSongsByTableRank(allSongs, tableType, level, rank);
       if (error) return interaction.editReply(error);
       filtered = tableSongs;
       tableLabel = `☆${level} ${tableType === "clear" ? "クリア" : "ハード"}地力表 | ${rank}`;
