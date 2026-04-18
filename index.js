@@ -620,7 +620,7 @@ client.on("interactionCreate", async (interaction) => {
       .setColor(0x5865f2)
       .addFields(
         {
-          name: "🎲 `/random`　ランダム選曲",
+          name: "`/random`　ランダム選曲",
           value: [
             "`game` … ゲームタイトル（必須）",
             "`level` … 難易度レベルで絞り込み（例: `12`）",
@@ -636,7 +636,7 @@ client.on("interactionCreate", async (interaction) => {
           ].join("\n"),
         },
         {
-          name: "🔍 `/search`　楽曲検索",
+          name: "`/search`　楽曲検索",
           value: [
             "`game` … ゲームタイトル（必須）",
             "`query` … 検索キーワード（タイトル・アーティスト・ジャンルを横断検索）",
@@ -646,7 +646,7 @@ client.on("interactionCreate", async (interaction) => {
           ].join("\n"),
         },
         {
-          name: "📋 対応ゲーム",
+          name: "対応ゲーム",
           value: Object.keys(GAME_URLS).map((k) => k.toUpperCase()).join(", "),
         },
       )
